@@ -4483,7 +4483,14 @@ function Get-StorageBusCacheReport
     CacheDiskState;
     #>
 
-    dir $Path\*cluster.log | sort -Property BaseName |% {
+    $p = gi $Path
+    if ($p.PsIsContainer) {
+        $process = @(dir $Path\*cluster.log | sort -Property BaseName)
+    } else {
+        $process = @($p)
+    }
+
+    $process |% {
 
         $node = "<unknown>"
         if ($_.BaseName -match "^(.*)_cluster$") {
@@ -4491,7 +4498,6 @@ function Get-StorageBusCacheReport
         }
 
         Write-Output ("-"*40) "Node: $node"
-
 
         ##
         # Parse cluster log for the SBL Disk section
@@ -4534,7 +4540,8 @@ function Get-StorageBusCacheReport
                                 "= not present $($_.CacheDeviceId)"
                             }
                         }
-                    },@{
+                    },
+                    @{
                         Label = 'SeekPenalty'; Expression = {$_.HasSeekPenalty}
                     },
                     PathId,BindingAttributes,DirtyPages
@@ -4544,16 +4551,17 @@ function Get-StorageBusCacheReport
             # Now do basic testing of device counts
             ##
 
-            $dcache = $d |? IsSblCacheDevice -eq 'true'
-            $dcap = $d |? IsSblCacheDevice -ne 'true'
+            $dcache = @($d |? IsSblCacheDevice -eq 'true')
+            $dcap = @($d |? IsSblCacheDevice -ne 'true')
 
             Write-Output "Device counts: cache $($dcache.count) capacity $($dcap.count)"
 
             ##
-            # Test cache bindings if we do have cache present
+            # Test cache bindings if we do have cap/cache present
+            # Cache devices may be absent in normal flat cases
             ##
 
-            if ($dcache) {
+            if ($dcache.count) {
 
                 # first uneven check, the basic count case
                 $uneven = $false
@@ -4573,18 +4581,18 @@ function Get-StorageBusCacheReport
                     $uneven = $true
                 }
 
-                $gdev = $dcap |? DiskState -eq 'CacheDiskStateInitializedAndBound' | group -property CacheDeviceId
+                $gdev = @($dcap |? DiskState -eq 'CacheDiskStateInitializedAndBound' | group -property CacheDeviceId)
 
-                if (@($gdev).count -ne $dcache.count) {
+                if ($gdev.count -ne $dcache.count) {
                     Write-Warning "Not all cache devices in use"
                 }
 
-                $gdist = $gdev |% { $_.count } | group
+                $gdist = @($gdev |% { $_.count } | group)
 
                 # in any given round robin binding of devices, there should be at most two counts; n and n-1
 
                 # single ratio
-                if (@($gdist).count -eq 1) {
+                if ($gdist.count -eq 1) {
                     Write-Output "Binding ratio is even: 1:$($gdist.name)"
                 } else {
                     # group names are n in the 1:n binding ratios
@@ -4609,9 +4617,9 @@ function Get-StorageBusCacheReport
             # Provide summary of diskstate if more than one is present in the results
             ##
 
-            $g = $d | group -property DiskState
+            $g = @($d | group -property DiskState)
 
-            if (@($g).count -ne 1) {
+            if ($g.count -ne 1) {
                 write-output "Disk State Summary:"
                 $g | sort -property Name | ft @{ Label = 'DiskState'; Expression = { Format-StorageBusCacheDiskState $_.Name}},@{ Label = "Number of Disks"; Expression = { $_.Count }}
             } else {
