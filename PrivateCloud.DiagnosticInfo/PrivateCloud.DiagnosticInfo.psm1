@@ -292,6 +292,7 @@ $CommonFuncBlock = {
                         'Microsoft-Windows-REFS',
                         'Microsoft-Windows-ResumeKeyFilter',
                         'Microsoft-Windows-SMB',
+			'Microsoft-Windows-ServicesForNFS',
                         'Microsoft-Windows-Storage',
                         'Microsoft-Windows-TCPIP',
                         'Microsoft-Windows-VHDMP',
