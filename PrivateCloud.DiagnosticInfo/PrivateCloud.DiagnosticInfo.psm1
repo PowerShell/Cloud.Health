@@ -293,6 +293,7 @@ $CommonFuncBlock = {
                         'Microsoft-Windows-ResumeKeyFilter',
                         'Microsoft-Windows-SMB',
                         'Microsoft-Windows-Storage',
+                        'Microsoft-Windows-StorageReplica',
                         'Microsoft-Windows-TCPIP',
                         'Microsoft-Windows-VHDMP',
                         'Microsoft-Windows-SDDC-Management',
@@ -306,6 +307,7 @@ $CommonFuncBlock = {
         $LogToExclude = 'Microsoft-Windows-FailoverClustering/Diagnostic',
                         'Microsoft-Windows-FailoverClustering/DiagnosticVerbose',
                         'Microsoft-Windows-FailoverClustering-Client/Diagnostic',
+                        'Microsoft-Windows-StorageReplica/Performance',
                         'Microsoft-Windows-StorageSpaces-Driver/Performance'
 
         # Core logs to gather, by explicit names.
