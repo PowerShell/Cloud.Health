@@ -728,7 +728,9 @@ function Invoke-SddcCommonCommand (
     [string[]] $ClusterNodes = @(),
     [string] $JobName,
     [scriptblock] $InitBlock,
-    [scriptblock] $ScriptBlock
+    [scriptblock] $ScriptBlock,
+    # If session configuration name is $null, it connect to default powershell
+    [string] $SessionConfigurationName
     )
 {
 	$Job        = @()
@@ -737,11 +739,11 @@ function Invoke-SddcCommonCommand (
 
 	if ($ClusterNodes.Count -eq 0)
 	{
-		$Sessions = New-PSSession -Cn localhost -EnableNetworkAccess
+		$Sessions = New-PSSession -Cn localhost -EnableNetworkAccess -ConfigurationName $SessionConfigurationName
 	}
 	else
 	{
-		$Sessions = New-PSSession -ComputerName $ClusterNodes
+		$Sessions = New-PSSession -ComputerName $ClusterNodes -ConfigurationName $SessionConfigurationName
 	}
 
     Invoke-Command -Session $Sessions $InitBlock
@@ -1046,6 +1048,10 @@ Include a performance counter capture.
 Include Storage Reliability counters. This may incur a short but observable latency cost on the
 physical disks due to varying overhead in their internal handling of SMART queries.
 
+.PARAMETER SessionConfigurationName
+SessionConfigurationName to connect to other nodes in cluster.
+Null if default configuration is to be used.
+
 #>
 
 function Get-SddcDiagnosticInfo
@@ -1192,7 +1198,11 @@ function Get-SddcDiagnosticInfo
 
         [parameter(ParameterSetName="WriteC", Mandatory=$false)]
         [parameter(ParameterSetName="WriteN", Mandatory=$false)]
-        [switch] $IncludeReliabilityCounters
+        [switch] $IncludeReliabilityCounters,
+
+        [parameter(ParameterSetName="WriteC", Mandatory=$false)]
+        [parameter(ParameterSetName="WriteN", Mandatory=$false)]
+        [string] $SessionConfigurationName = $null
         )
 
     #
@@ -1698,7 +1708,7 @@ function Get-SddcDiagnosticInfo
                     $null = Confirm-SddcDiagnosticModule -Cluster $using:Cluster 3> $o
                 }
 
-                $j = Invoke-SddcCommonCommand -ClusterNodes $ClusterNodes.Name -JobName SddcDiagnosticArchive -InitBlock $CommonFunc {
+                $j = Invoke-SddcCommonCommand -ClusterNodes $ClusterNodes.Name -JobName SddcDiagnosticArchive -SessionConfigurationName $SessionConfigurationName -InitBlock $CommonFunc {
 
                     Import-Module $using:Module -ErrorAction SilentlyContinue
 
@@ -1838,7 +1848,7 @@ function Get-SddcDiagnosticInfo
 
         Show-Update "Start gather of verifier ..."
 
-        $JobCopyOut += Invoke-SddcCommonCommand -ClusterNodes $($ClusterNodes).Name -JobName Verifier -InitBlock $CommonFunc {
+        $JobCopyOut += Invoke-SddcCommonCommand -ClusterNodes $($ClusterNodes).Name -JobName Verifier -SessionConfigurationName $SessionConfigurationName -InitBlock $CommonFunc {
 
             # import common functions
             . ([scriptblock]::Create($using:CommonFunc))
@@ -1856,7 +1866,7 @@ function Get-SddcDiagnosticInfo
 
         Show-Update "Start gather of filesystem filter status ..."
 
-        $JobCopyOut += Invoke-SddcCommonCommand -ClusterNodes $($ClusterNodes).Name -JobName 'Filesystem Filter Manager' -InitBlock $CommonFunc {
+        $JobCopyOut += Invoke-SddcCommonCommand -ClusterNodes $($ClusterNodes).Name -JobName 'Filesystem Filter Manager' -SessionConfigurationName $SessionConfigurationName -InitBlock $CommonFunc {
 
             # import common functions
             . ([scriptblock]::Create($using:CommonFunc))
@@ -2028,7 +2038,7 @@ function Get-SddcDiagnosticInfo
 
             $NodeName = $_
 
-            Invoke-SddcCommonCommand -JobName "System Info: $NodeName" -InitBlock $CommonFunc -ScriptBlock {
+            Invoke-SddcCommonCommand -JobName "System Info: $NodeName" -InitBlock $CommonFunc -SessionConfigurationName $SessionConfigurationName -ScriptBlock {
 
                 $Node = "$using:NodeName"
                 if ($using:ClusterDomain.Length) {
@@ -4739,7 +4749,7 @@ function Get-StorageLatencyReport
 
         # parallelize processing of per-node event logs
 
-        $j += Invoke-SddcCommonCommand -InitBlock $CommonFunc -JobName $node -ScriptBlock {
+        $j += Invoke-SddcCommonCommand -InitBlock $CommonFunc -JobName $node -SessionConfigurationName $null -ScriptBlock {
 
 			$dofull = $false
 
