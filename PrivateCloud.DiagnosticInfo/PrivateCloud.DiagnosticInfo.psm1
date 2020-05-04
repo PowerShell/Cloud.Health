@@ -4523,8 +4523,11 @@ function Get-StorageBusCacheReport
             }
 
             if ($ReportLevel -eq [ReportLevelType]::Full) {
-                $d | sort IsSblCacheDevice,CacheDeviceId,DiskState | ft -AutoSize @{ Label = 'DiskState'; Expression = { Format-StorageBusCacheDiskState $_.DiskState }},
-                    DiskId,ProductId,Serial,@{
+                $d | sort IsSblCacheDevice,CacheDeviceId,DiskState | ft -AutoSize @{
+                        Label = 'DiskState'; Expression = { Format-StorageBusCacheDiskState $_.DiskState }
+                    },
+                    DiskId,ProductId,Serial,
+                    @{
                         Label = 'Device#'; Expression = {$_.DeviceNumber}
                     },
                     @{
@@ -4544,7 +4547,10 @@ function Get-StorageBusCacheReport
                     @{
                         Label = 'SeekPenalty'; Expression = {$_.HasSeekPenalty}
                     },
-                    PathId,BindingAttributes,DirtyPages
+                    PathId,BindingAttributes,DirtyPages,
+                    @{
+                        Label = 'NZ HealthCounters'; Expression = {$_.HealthCounters -replace './. 0 ?',''}
+                    }
             }
 
             ##
