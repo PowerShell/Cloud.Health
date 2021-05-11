@@ -1783,7 +1783,15 @@ function Get-SddcDiagnosticInfo
                     $o | Export-Clixml ($using:Path + "GetClusterNetwork.XML")
                 }
                 catch { Show-Warning("Could not get Cluster Nodes. `nError="+$_.Exception.Message) }
-            }
+            }	    
+
+            $JobStatic += start-job -Name ClusterNetworkLiveMigrationInformation {
+                try {
+                    $o = Get-ClusterResourceType -Name 'Virtual Machine' -Cluster $using:AccessNode | Get-ClusterParameter
+                    $o | Export-Clixml ($using:Path + "ClusterNetworkLiveMigration.XML")
+                }
+                catch { Show-Warning("Could not get Cluster Network Live Migration Information. `nError="+$_.Exception.Message) }
+            }	
 
             $JobStatic += start-job -Name ClusterResource {
                 try {
@@ -2056,7 +2064,12 @@ function Get-SddcDiagnosticInfo
                 # Text-only conventional commands
                 #
                 # Gather SYSTEMINFO.EXE output for a given node
-                SystemInfo.exe /S $using:NodeName > (Join-Path (Get-NodePath $using:Path $using:NodeName) "SystemInfo.TXT")
+			$SysInfoOut=(Join-Path (Get-NodePath $using:Path $using:NodeName) "SystemInfo.TXT")
+			Start-Process -FilePath "$env:comspec" -ArgumentList "/c SystemInfo.exe /S $using:NodeName > $SysInfoOut" -WindowStyle Hidden -Wait
+		
+		# Gather MSINFO32.EXE output for a given node
+			#$MSINFO32Out=(Join-Path (Get-NodePath $using:Path $using:NodeName) "MSINFO32.NFO")
+			#Start-Process -FilePath "$env:comspec" -ArgumentList "/c MSINFO32.exe /nfo $MSINFO32Out /Computer $using:NodeName" -WindowStyle Hidden -Wait
 
                 # Cmdlets to drop in TXT and XML forms
                 #
@@ -2092,7 +2105,15 @@ function Get-SddcDiagnosticInfo
                                 'Get-NetTcpSetting -CimSession _C_',
                                 'Get-ScheduledTask -CimSession _C_ | Get-ScheduledTaskInfo -CimSession _C_',
                                 'Get-SmbServerNetworkInterface -CimSession _C_',
-                                'Get-StorageFaultDomain -CimSession _A_ -Type StorageScaleUnit |? FriendlyName -eq _N_ | Get-StorageFaultDomain -CimSession _A_'
+                                'Get-StorageFaultDomain -CimSession _A_ -Type StorageScaleUnit |? FriendlyName -eq _N_ | Get-StorageFaultDomain -CimSession _A_',
+				'Get-NetFirewallProfile -CimSession _C_',
+				'Get-NetFirewallRule -CimSession _C_',
+				'Get-NetConnectionProfile -CimSession _C_',
+				'Get-SmbMultichannelConnection -CimSession _C_ -SmbInstance SBL',
+				'Get-SmbClientConfiguration -CimSession _C_',
+				'Get-SmbServerConfiguration -CimSession _C_',
+				'Invoke-Command -ComputerName _C_ {Get-ComputerInfo}',
+				'Invoke-Command -ComputerName _C_ {Get-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Services\spacePort\Parameters}'				
 
                 # These commands are specific to optional modules, add only if present
                 #   - DcbQos: RoCE environments primarily
@@ -2106,17 +2127,21 @@ function Get-SddcDiagnosticInfo
                 if (Get-Module Hyper-V -ErrorAction SilentlyContinue) {
                     $CmdsToLog += 'Get-VM -CimSession _C_ -ErrorAction SilentlyContinue',
                                     'Get-VMNetworkAdapter -All -CimSession _C_ -ErrorAction SilentlyContinue',
-                                    'Get-VMSwitch -CimSession _C_ -ErrorAction SilentlyContinue'
+                                    'Get-VMSwitch -CimSession _C_ -ErrorAction SilentlyContinue',
+				    'Get-VMSwitchTeam -CimSession _C_ -SwitchName ((Get-VMSwitch -CimSession _C_ | Where-Object {$_.EmbeddedTeamingEnabled -eq $true}).Name) -ErrorAction SilentlyContinue',
+				    'Get-VMHost -CimSession _C_ -ErrorAction SilentlyContinue',
+                                    'Get-VMNetworkAdapterVlan -CimSession _C_ -ManagementOS -ErrorAction SilentlyContinue',
+                                    'Get-VMNetworkAdapterTeamMapping -CimSession _C_ -ManagementOS -ErrorAction SilentlyContinue'				    
                 }
 
                 foreach ($cmd in $CmdsToLog) {
 
                     # truncate cmd string to the cmd itself
-                    $LocalFile = (Join-Path $LocalNodeDir (($cmd.split(' '))[0] -replace "-",""))
+                    $LocalFile = (Join-Path $LocalNodeDir ([regex]::match(($cmd.split() | Where-Object {$_ -imatch 'Get-'}),'Get-[a-zA-Z0-9]*').value -replace "-",""))
                     try {
 
                         $cmdex = $cmd -replace '_C_',$using:NodeName -replace '_N_',$using:NodeName -replace '_A_',$using:AccessNode
-                        $out = iex $cmdex
+                        $out = Invoke-Expression $cmdex
 
                         # capture as txt and xml for quick analysis according to taste
                         $out | ft -AutoSize | Out-File -Width 9999 -Encoding ascii -FilePath "$LocalFile.txt"
@@ -2474,6 +2499,13 @@ function Get-SddcDiagnosticInfo
         }
 
         Show-Update "Storage Pool & Tiers"
+
+	# Storage Node information
+
+        try {
+            Get-StorageNode -CimSession $AccessNode |
+                Export-Clixml ($Path + "GetStorageNode.XML") }
+        catch { Show-Warning("Unable to get Storage Nodes. `nError="+$_.Exception.Message) }
 
         # Storage tier information
 
